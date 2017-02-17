@@ -29,6 +29,15 @@
 (defun cipher-ciphers ()
   (cipher-core-ciphers))
 
+(defun cipher-init (cipher)
+  (cipher-core-init cipher))
+
+(defun cipher-generate-random-key (context)
+  (cipher-core-generate-random-key context))
+
+(defun cipher-generate-random-iv (context)
+  (cipher-core-generate-random-iv context))
+
 (provide 'cipher)
 
 ;;; cipher.el ends here
