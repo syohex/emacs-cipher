@@ -15,7 +15,8 @@ CC      = gcc
 LD      = gcc
 CPPFLAGS = -I$(EMACS_ROOT)/src $(OPENSSL_CFLAGS)
 CFLAGS = -std=gnu99 -ggdb3 -Wall -fPIC $(CPPFLAGS)
-LDFLAGS = $(OPENSSL_LDFLAGS) $(shell pkg-config --libs openssl)
+LDFLAGS = $(OPENSSL_LDFLAGS)
+CIPHER_LIBS=$(shell pkg-config --libs openssl)
 
 .PHONY : test
 
