@@ -237,7 +237,7 @@ emacs_module_init(struct emacs_runtime *ert)
 	DEFUN("cipher-core-ciphers", Fciphers, 0, 0, NULL, NULL);
 	DEFUN("cipher-core-init", Fcipher_init, 1, 1, NULL, NULL);
 	DEFUN("cipher-core-set-key", Fcipher_set_key, 2, 2, NULL, NULL);
-	DEFUN("cipher-core-set-cipher", Fcipher_set_iv, 2, 2, NULL, NULL);
+	DEFUN("cipher-core-set-iv", Fcipher_set_iv, 2, 2, NULL, NULL);
 
 	DEFUN("cipher-core-generate-random-key", Fcipher_generate_random_key,
 	      1, 1, NULL, NULL);
