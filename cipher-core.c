@@ -193,6 +193,78 @@ Fcipher_set_iv(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 }
 
 static emacs_value
+cipher_crypt_common(emacs_env *env, struct el_cipher *ec, emacs_value data, bool encrypt)
+{
+	emacs_value retval = env->intern(env, "nil");
+
+	ptrdiff_t size;
+	char *buf = retrieve_string(env, data, &size);
+	if (buf == NULL) {
+		return retval;
+	}
+
+	int output_len = (size-1) + EVP_CIPHER_CTX_block_size(&ec->ctx);
+	if (output_len <= 0) {
+		goto exit1;
+	}
+
+	char *crypted = malloc(output_len);
+	if (crypted == NULL) {
+		goto exit1;
+	}
+
+        bool encrypted = encrypt ? 1 : 0;
+	if (EVP_CipherInit_ex(&ec->ctx, NULL, NULL, NULL, NULL, encrypted) != 1) {
+		goto exit2;
+	}
+
+	int ret = EVP_CipherUpdate(&ec->ctx, (unsigned char*)crypted, &output_len,
+				   (const unsigned char*)buf, (size-1));
+	if (!ret) {
+		goto exit2;
+	}
+	emacs_value crypted_val = env->make_string(env, crypted, output_len);
+
+	char *final_buf = malloc(EVP_CIPHER_CTX_block_size(&ec->ctx));
+	if (final_buf == NULL) {
+		goto exit2;
+	}
+
+	int final_len;
+	ret = EVP_CipherFinal_ex(&ec->ctx, (unsigned char*)final_buf, &final_len);
+	if (ret == 0) {
+		goto exit3;
+	}
+
+	emacs_value final_val = env->make_string(env, final_buf, final_len);
+	emacs_value Fconcat = env->intern(env, "concat");
+	emacs_value concat_args[] = {crypted_val, final_val};
+	retval = env->funcall(env, Fconcat, 2, concat_args);
+
+exit3:
+	free(final_buf);
+exit2:
+	free(crypted);
+exit1:
+	free(buf);
+	return retval;
+}
+
+static emacs_value
+Fcipher_encrypt(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
+{
+	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
+	return cipher_crypt_common(env, ec, args[1], true);
+}
+
+static emacs_value
+Fcipher_decrypt(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
+{
+	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
+	return cipher_crypt_common(env, ec, args[1], false);
+}
+
+static emacs_value
 Fciphers(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 {
 	struct cipher_names cn = {env, env->intern(env, "nil") };
@@ -243,6 +315,9 @@ emacs_module_init(struct emacs_runtime *ert)
 	      1, 1, NULL, NULL);
 	DEFUN("cipher-core-generate-random-iv", Fcipher_generate_random_iv,
 	      1, 1, NULL, NULL);
+
+	DEFUN("cipher-core-encrypt", Fcipher_encrypt, 2, 2, NULL, NULL);
+	DEFUN("cipher-core-decrypt", Fcipher_decrypt, 2, 2, NULL, NULL);
 
 #undef DEFUN
 
