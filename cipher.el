@@ -32,6 +32,18 @@
 (defun cipher-init (cipher)
   (cipher-core-init cipher))
 
+(defun cipher-encrypt (cipher data)
+  (cipher-core-encrypt cipher data))
+
+(defun cipher-decrypt (cipher data)
+  (cipher-core-decrypt cipher data))
+
+(defun cipher-set-key (context key)
+  (cipher-core-set-key context key))
+
+(defun cipher-set-iv (context iv)
+  (cipher-core-set-iv context iv))
+
 (defun cipher-generate-random-key (context)
   (cipher-core-generate-random-key context))
 
