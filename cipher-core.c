@@ -193,6 +193,20 @@ Fcipher_set_iv(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 }
 
 static emacs_value
+Fcipher_set_padding(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
+{
+	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
+	intmax_t padding = env->extract_integer(env, args[1]);
+
+	int ret = EVP_CIPHER_CTX_set_padding(&ec->ctx, (int)padding);
+	if (ret == 0) {
+		return env->intern(env, "nil");
+	}
+
+	return env->intern(env, "t");
+}
+
+static emacs_value
 cipher_crypt_common(emacs_env *env, struct el_cipher *ec, emacs_value data, bool encrypt)
 {
 	emacs_value retval = env->intern(env, "nil");
@@ -310,6 +324,7 @@ emacs_module_init(struct emacs_runtime *ert)
 	DEFUN("cipher-core-init", Fcipher_init, 1, 1, NULL, NULL);
 	DEFUN("cipher-core-set-key", Fcipher_set_key, 2, 2, NULL, NULL);
 	DEFUN("cipher-core-set-iv", Fcipher_set_iv, 2, 2, NULL, NULL);
+	DEFUN("cipher-core-set-padding", Fcipher_set_padding, 2, 2, NULL, NULL);
 
 	DEFUN("cipher-core-generate-random-key", Fcipher_generate_random_key,
 	      1, 1, NULL, NULL);

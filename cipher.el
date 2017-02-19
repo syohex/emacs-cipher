@@ -44,6 +44,9 @@
 (defun cipher-set-iv (context iv)
   (cipher-core-set-iv context iv))
 
+(defun cipher-set-padding (context padding)
+  (cipher-core-set-padding context padding))
+
 (defun cipher-generate-random-key (context)
   (cipher-core-generate-random-key context))
 
