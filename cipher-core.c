@@ -227,17 +227,16 @@ cipher_crypt_common(emacs_env *env, struct el_cipher *ec, emacs_value data, bool
 		goto exit1;
 	}
 
-        bool encrypted = encrypt ? 1 : 0;
-	if (EVP_CipherInit_ex(&ec->ctx, NULL, NULL, NULL, NULL, encrypted) != 1) {
+	int ret = EVP_CipherInit_ex(&ec->ctx, NULL, NULL, NULL, NULL, encrypt ? 1 : 0);
+	if (ret == 0) {
 		goto exit2;
 	}
 
-	int ret = EVP_CipherUpdate(&ec->ctx, (unsigned char*)crypted, &output_len,
-				   (const unsigned char*)buf, (size-1));
-	if (!ret) {
+	ret = EVP_CipherUpdate(&ec->ctx, (unsigned char*)crypted, &output_len,
+			       (const unsigned char*)buf, (size-1));
+	if (ret == 0) {
 		goto exit2;
 	}
-	emacs_value crypted_val = env->make_string(env, crypted, output_len);
 
 	char *final_buf = malloc(EVP_CIPHER_CTX_block_size(&ec->ctx));
 	if (final_buf == NULL) {
@@ -250,11 +249,19 @@ cipher_crypt_common(emacs_env *env, struct el_cipher *ec, emacs_value data, bool
 		goto exit3;
 	}
 
-	emacs_value final_val = env->make_string(env, final_buf, final_len);
-	emacs_value Fconcat = env->intern(env, "concat");
-	emacs_value concat_args[] = {crypted_val, final_val};
-	retval = env->funcall(env, Fconcat, 2, concat_args);
+	EVP_CIPHER_CTX_cleanup(&ec->ctx);
 
+	ptrdiff_t ret_len = output_len + final_len;
+	char *ret_buf = malloc(ret_len);
+	if (ret_buf == NULL)  {
+		goto exit3;
+	}
+
+	memcpy(ret_buf, crypted, output_len);
+	memcpy(ret_buf, final_buf, final_len);
+	retval = env->make_string(env, ret_buf, ret_len);
+
+	free(ret_buf);
 exit3:
 	free(final_buf);
 exit2:
