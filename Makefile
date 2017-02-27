@@ -3,6 +3,7 @@ EMACS_ROOT ?= ../..
 UNAME_S=$(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 	EMACS ?= /Applications/Emacs.app/Contents/MacOS/Emacs
+	# homebrew OpenSSL
 	OPENSSL_CFLAGS =  -I/usr/local/opt/openssl/include
 	OPENSSL_LDFLAGS = -L/usr/local/opt/openssl/lib
 else
