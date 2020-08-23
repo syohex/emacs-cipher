@@ -29,7 +29,7 @@
 int plugin_is_GPL_compatible;
 
 struct el_cipher {
-	EVP_CIPHER_CTX ctx;
+	EVP_CIPHER_CTX *ctx;
 	bool is_set_key;
 	char *key;
 };
@@ -59,7 +59,7 @@ static void
 el_cipher_free(void *arg)
 {
 	struct el_cipher *ec = (struct el_cipher*)arg;
-	EVP_CIPHER_CTX_cleanup(&ec->ctx);
+	EVP_CIPHER_CTX_cleanup(ec->ctx);
 	free(ec);
 }
 
@@ -83,7 +83,9 @@ Fcipher_init(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 		return env->intern(env, "nil");
 	}
 
-	EVP_CIPHER_CTX_init(&ec->ctx);
+	ec->ctx = EVP_CIPHER_CTX_new();
+
+	EVP_CIPHER_CTX_init(ec->ctx);
 	ec->is_set_key = false;
 
 	ptrdiff_t size;
@@ -97,7 +99,7 @@ Fcipher_init(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 		return env->intern(env, "nil");
 	}
 
-	int ret = EVP_CipherInit_ex(&ec->ctx, cipher, NULL, NULL, NULL, -1);
+	int ret = EVP_CipherInit_ex(ec->ctx, cipher, NULL, NULL, NULL, -1);
 	if (ret == 0) {
 		return env->intern(env, "nil");
 	}
@@ -110,7 +112,7 @@ Fcipher_generate_random_key(emacs_env *env, ptrdiff_t nargs, emacs_value args[],
 {
 	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
 
-	int key_len = EVP_CIPHER_CTX_key_length(&ec->ctx);
+	int key_len = EVP_CIPHER_CTX_key_length(ec->ctx);
 	char *key_buf = malloc(key_len+1);
 	if (key_buf == NULL) {
 		return env->intern(env, "nil");
@@ -127,7 +129,7 @@ Fcipher_generate_random_iv(emacs_env *env, ptrdiff_t nargs, emacs_value args[], 
 {
 	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
 
-	int iv_len = EVP_CIPHER_CTX_iv_length(&ec->ctx);
+	int iv_len = EVP_CIPHER_CTX_iv_length(ec->ctx);
 	char *iv_buf = malloc(iv_len+1);
 	if (iv_buf == NULL) {
 		return env->intern(env, "nil");
@@ -150,13 +152,13 @@ Fcipher_set_key(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 		return env->intern(env, "nil");
 	}
 
-	int key_len = EVP_CIPHER_CTX_key_length(&ec->ctx);
+	int key_len = EVP_CIPHER_CTX_key_length(ec->ctx);
 	if ((size - 1) != key_len) {
 		free(key);
 		return env->intern(env, "nil");
 	}
 
-	int ret = EVP_CipherInit_ex(&ec->ctx, NULL, NULL, (const unsigned char*)key, NULL, -1);
+	int ret = EVP_CipherInit_ex(ec->ctx, NULL, NULL, (const unsigned char*)key, NULL, -1);
 	free(key);
 	if (ret == 0) {
 		return env->intern(env, "nil");
@@ -177,13 +179,13 @@ Fcipher_set_iv(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 		return env->intern(env, "nil");
 	}
 
-	int iv_len = EVP_CIPHER_CTX_iv_length(&ec->ctx);
+	int iv_len = EVP_CIPHER_CTX_iv_length(ec->ctx);
 	if ((size - 1) != iv_len) {
 		free(iv);
 		return env->intern(env, "nil");
 	}
 
-	int ret = EVP_CipherInit_ex(&ec->ctx, NULL, NULL, NULL, (const unsigned char*)iv, -1);
+	int ret = EVP_CipherInit_ex(ec->ctx, NULL, NULL, NULL, (const unsigned char*)iv, -1);
 	free(iv);
 	if (ret == 0) {
 		return env->intern(env, "nil");
@@ -198,7 +200,7 @@ Fcipher_set_padding(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *d
 	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
 	intmax_t padding = env->extract_integer(env, args[1]);
 
-	int ret = EVP_CIPHER_CTX_set_padding(&ec->ctx, (int)padding);
+	int ret = EVP_CIPHER_CTX_set_padding(ec->ctx, (int)padding);
 	if (ret == 0) {
 		return env->intern(env, "nil");
 	}
@@ -207,17 +209,18 @@ Fcipher_set_padding(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *d
 }
 
 static emacs_value
-cipher_crypt_common(emacs_env *env, struct el_cipher *ec, emacs_value data, bool encrypt)
+Fcipher_encrypt(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
 {
+	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
 	emacs_value retval = env->intern(env, "nil");
 
 	ptrdiff_t size;
-	char *buf = retrieve_string(env, data, &size);
+	char *buf = retrieve_string(env, args[1], &size);
 	if (buf == NULL) {
 		return retval;
 	}
 
-	int output_len = (size-1) + EVP_CIPHER_CTX_block_size(&ec->ctx);
+	int output_len = (size-1) + EVP_CIPHER_CTX_block_size(ec->ctx);
 	if (output_len <= 0) {
 		goto exit1;
 	}
@@ -227,29 +230,105 @@ cipher_crypt_common(emacs_env *env, struct el_cipher *ec, emacs_value data, bool
 		goto exit1;
 	}
 
-	int ret = EVP_CipherInit_ex(&ec->ctx, NULL, NULL, NULL, NULL, encrypt ? 1 : 0);
+	int ret = EVP_CipherInit_ex(ec->ctx, NULL, NULL, NULL, NULL, 1);
 	if (ret == 0) {
 		goto exit2;
 	}
 
-	ret = EVP_CipherUpdate(&ec->ctx, (unsigned char*)crypted, &output_len,
+	ret = EVP_CipherUpdate(ec->ctx, (unsigned char*)crypted, &output_len,
 			       (const unsigned char*)buf, (size-1));
 	if (ret == 0) {
 		goto exit2;
 	}
 
-	char *final_buf = malloc(EVP_CIPHER_CTX_block_size(&ec->ctx));
+	unsigned char *final_buf = malloc(EVP_CIPHER_CTX_block_size(ec->ctx));
+	if (final_buf == NULL) {
+		goto exit2;
+	}
+	memset(final_buf, 0, 16);
+
+	int final_len;
+	ret = EVP_CipherFinal_ex(ec->ctx, (unsigned char*)final_buf, &final_len);
+	if (ret == 0) {
+		goto exit3;
+	}
+
+	ptrdiff_t ret_len = output_len + final_len;
+	unsigned char *ret_buf = malloc(ret_len);
+	if (ret_buf == NULL)  {
+		goto exit3;
+	}
+
+	memcpy(ret_buf, crypted, output_len);
+	memcpy(ret_buf + output_len, final_buf, final_len);
+
+	emacs_value Fmake_vector = env->intern(env, "make-vector");
+	emacs_value make_vector_args[2] = {
+		env->make_integer(env, ret_len),
+		env->make_integer(env, 0)
+	};
+	emacs_value ret_vec = env->funcall(env, Fmake_vector, 2, make_vector_args);
+	for (ptrdiff_t i = 0; i < ret_len; ++i) {
+		env->vec_set(env, ret_vec, i, env->make_integer(env, ret_buf[i]));
+	}
+
+	free(ret_buf);
+exit3:
+	free(final_buf);
+exit2:
+	free(crypted);
+exit1:
+	free(buf);
+	return ret_vec;
+}
+
+static emacs_value
+Fcipher_decrypt(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
+{
+	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
+	emacs_value retval = env->intern(env, "nil");
+
+	ptrdiff_t size = env->vec_size(env, args[1]);
+	unsigned char *buf = malloc(size);
+	if (buf == NULL) {
+		return retval;
+	}
+
+	for (ptrdiff_t i = 0; i < size; ++i) {
+		buf[i] = env->extract_integer(env, env->vec_get(env, args[1], i));
+	}
+
+	int output_len = (int)size + EVP_CIPHER_CTX_block_size(ec->ctx);
+	if (output_len <= 0) {
+		goto exit1;
+	}
+
+	char *crypted = malloc(output_len);
+	if (crypted == NULL) {
+		goto exit1;
+	}
+
+	int ret = EVP_CipherInit_ex(ec->ctx, NULL, NULL, NULL, NULL, 0);
+	if (ret == 0) {
+		goto exit2;
+	}
+
+	ret = EVP_CipherUpdate(ec->ctx, (unsigned char*)crypted, &output_len,
+			       (const unsigned char*)buf, size);
+	if (ret == 0) {
+		goto exit2;
+	}
+
+	char *final_buf = malloc(EVP_CIPHER_CTX_block_size(ec->ctx));
 	if (final_buf == NULL) {
 		goto exit2;
 	}
 
 	int final_len;
-	ret = EVP_CipherFinal_ex(&ec->ctx, (unsigned char*)final_buf, &final_len);
+	ret = EVP_CipherFinal_ex(ec->ctx, (unsigned char*)final_buf, &final_len);
 	if (ret == 0) {
 		goto exit3;
 	}
-
-	EVP_CIPHER_CTX_cleanup(&ec->ctx);
 
 	ptrdiff_t ret_len = output_len + final_len;
 	char *ret_buf = malloc(ret_len);
@@ -258,7 +337,7 @@ cipher_crypt_common(emacs_env *env, struct el_cipher *ec, emacs_value data, bool
 	}
 
 	memcpy(ret_buf, crypted, output_len);
-	memcpy(ret_buf, final_buf, final_len);
+	memcpy(ret_buf + output_len, final_buf, final_len);
 	retval = env->make_string(env, ret_buf, ret_len);
 
 	free(ret_buf);
@@ -269,20 +348,6 @@ exit2:
 exit1:
 	free(buf);
 	return retval;
-}
-
-static emacs_value
-Fcipher_encrypt(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
-{
-	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
-	return cipher_crypt_common(env, ec, args[1], true);
-}
-
-static emacs_value
-Fcipher_decrypt(emacs_env *env, ptrdiff_t nargs, emacs_value args[], void *data)
-{
-	struct el_cipher *ec = env->get_user_ptr(env, args[0]);
-	return cipher_crypt_common(env, ec, args[1], false);
 }
 
 static emacs_value
